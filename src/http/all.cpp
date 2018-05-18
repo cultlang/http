@@ -17,7 +17,7 @@ using namespace cultlang::http;
 
 
 
-#define lMM semantics->builtin_implementMultiMethod
+#define lMM sem->builtin_implementMultiMethod
 #define HtP "http"
 
 
@@ -28,8 +28,6 @@ instance<Module> cultlang::http::make_http_bindings(instance<lisp::Namespace> ns
 	auto ret = instance<Module>::make(ns, loader);
 	auto sem = instance<CultSemantics>::make(ret);
 	ret->builtin_setSemantics(sem);
-
-	auto semantics = ret->require<CultSemantics>();
 
 	lMM(HtP"/request", []() { return t_req::make();});
 	lMM(HtP"/request", [](t_str s) { return cpptype<a_req>::typeDesc().getFeature<PParse>()->parse(*s); });

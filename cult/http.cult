@@ -3,66 +3,93 @@
 (require "builtin:cult/uv")
 (require "builtin:cult/http")
 
-(define loop (uv/loop))
-(define server (uv/tcp loop))
 
-(define pHandlers (uv/stream))
-(uv/stream/error pHandlers (function (ev client)
-  (do
+(define makePeerHandlers (function (router) 
+  (define pHandlers (uv/stream))
+  (uv/stream/error pHandlers (function (ev client)
+    (do
+      (print ev)
+    )
+  ))
+
+  (uv/stream/data pHandlers (function (ev client)
+    (do
+      (define req (http/request (string ev)))
+      (define rep (http/response))
+      (router req rep)
+      (uv/stream/write client (string rep))
+    )
+  ))
+
+  (uv/stream/write pHandlers (function (ev client)
+    (do
+      (uv/close client)
+    )
+  ))
+
+  (uv/stream/close pHandlers (function (ev client)
+    (do
+      (print "Peer Close")
+    )
+    
+  ))
+  (uv/stream/end pHandlers (function (ev client)
+    (do
+      (print "Peer End")
+      (uv/close client)  
+    )
+  ))
+  pHandlers
+))
+
+(define makeServerHandlers (function (loop pHandlers success failure) 
+  (define sHandlers (uv/stream))
+  (uv/stream/error sHandlers (function (ev server)
     (print ev)
-  )
+  ))
+  (uv/stream/listen sHandlers (function (ev server)
+    (do
+      (define peer (uv/tcp loop))
+      
+      (uv/stream/context peer pHandlers)
+      (uv/stream/accept server peer)
+      (uv/stream/read peer)
+    )
+  ))
+  sHandlers
 ))
 
-(uv/stream/data pHandlers (function (ev client)
-  (do
-    (define req (http/request (string ev)))
-    (print (http/request/path req))
-    (define rep (http/response))
-    (http/response/code rep 200u16)
-    (http/response/headers rep {
-      "Server" "cult/http"
-    })
-    (http/response/body rep "<h1>Hello World</h1>")
-    (uv/stream/write client (string rep))
-  )
+
+(define express (function ()
+  (define loop (uv/loop))
+  {
+    "loop" loop
+    "server" (uv/tcp loop)
+    "routes" {}
+  }
 ))
 
-(uv/stream/write pHandlers (function (ev client)
-  (do
-    (uv/close client)
-  )
+(define express/all (function (exp s handler)
+  (map/set (map/get exp "routes") s handler)
 ))
 
-(uv/stream/close pHandlers (function (ev client)
-  (do
-    (print "Peer Close")
-  )
+(define express/listen (function (exp port success failure)
+  (define loop (map/get exp "loop"))    
+  (define server (map/get exp "server"))
   
+  (define handle (function (req rep)
+    (define route (map/get (map/get exp "routes") (http/request/path exp)))
+    (cond route
+      (route req rep)
+      (do
+        (http/response/code rep 404)
+        (http/response/body "Request Not Found")
+      )
+    )
+  ))
+  (define pHandlers (makePeerHandlers handle))
+  (define sHandlers (makeServerHandlers loop pHandlers success failure))
+  (uv/stream/context server sHandlers)
+  (uv/tcp/bind (map/get exp "server") "127.0.0.1" (uint32 port))
+  (uv/run loop)
 ))
-(uv/stream/end pHandlers (function (ev client)
-  (do
-    (print "Peer End")
-    (uv/close client)  
-  )
-))
-
-(define sHandlers (uv/stream))
-(uv/stream/error sHandlers (function (ev server)
-  (print ev)
-))
-(uv/stream/listen sHandlers (function (ev server)
-  (do
-    (print "listen")
-    (define peer (uv/tcp loop))
-    (uv/stream/context peer pHandlers)
-    (uv/stream/accept server peer)
-    (uv/stream/read peer)
-  )
-))
-
-(uv/stream/context server sHandlers)
-(uv/tcp/bind server "127.0.0.1" 80u32)
-
-
-(uv/run loop)
-

@@ -13,9 +13,11 @@ dependencies:
 include-directories: []
   
 vendor-dependencies:
-  x86_64-pc-windows-msvccoff: []
+  x86_64-pc-windows-msvccoff:
+    - sundown
   x86_64-apple-macosx-macho: []
-  x86_64-pc-linux-gnu: []
+  x86_64-pc-linux-gnu:
+    - sundown
 
 platform-dependencies:
   x86_64-pc-windows-msvccoff: []

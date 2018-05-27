@@ -43,7 +43,7 @@ int main(int argc, char** argv)
 		}
 		try
 		{
-			auto live_module = ns->requireModule(fmt::format("file:{0}", f));
+			auto live_module = ns->requireModule(instance<>(), fmt::format("file:{0}", f));
 			live_module->initialize();
 		}
 		catch (stdext::exception e)

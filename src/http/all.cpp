@@ -8,7 +8,9 @@
 #include "cult/Request.h"
 #include "cult/Response.h"
 
-
+#include "sundown/markdown.h"
+#include "sundown/buffer.h"
+#include "sundown/html.h"
 
 using namespace craft;
 using namespace craft::lisp;
@@ -54,6 +56,31 @@ instance<Module> cultlang::http::make_http_bindings(instance<lisp::Namespace> ns
 	lMM(HtP"/response/body", [](t_rep r) { return r->body; });
 	lMM(HtP"/response/body", [](t_rep r, instance<> i) { r->body = i; });
 
+	lMM(HtP"/markdown/parse", [](t_str i) { 
+		struct buf *ib, *ob;
+		int ret;
+		FILE *in = stdin;
+
+		struct sd_callbacks callbacks;
+		struct html_renderopt options;
+		struct sd_markdown *markdown;
+
+		sdhtml_renderer(&callbacks, &options, 0);
+		markdown = sd_markdown_new(0, 16, &callbacks, &options);
+		ob = bufnew(i->size());
+		bufgrow(ob, 1024);
+
+		sd_markdown_render(ob, (uint8_t*)i->data(), i->size(), markdown);
+		sd_markdown_free(markdown);
+
+		/* writing the result to stdout */
+
+		auto res = instance<std::string>::make((char*)ob->data, ob->size);
+
+		/* cleanup */
+		bufrelease(ob);
+		return res;
+	});
 	return ret;
 }
 

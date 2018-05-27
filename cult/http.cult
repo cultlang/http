@@ -1,95 +1,63 @@
-(load-dll "CultlangUv.dll")
-(load-dll "CultlangHttp.dll")
+
+(cond (string/compare (platform/triplecross) "x86_64-pc-windows-msvccoff") 
+  (do
+    (load-dll "CultlangUv.dll")
+    (load-dll "CultlangHttp.dll")
+  )
+  (do
+    (load-dll "libCultlangUv.so")
+    (load-dll "libCultlangHttp.so")
+  )
+)
+
 (require "builtin:cult/uv")
 (require "builtin:cult/http")
 
+(define loop (uv/loop))
 
-(define makePeerHandlers (function (router) 
-  (define pHandlers (uv/stream))
-  (uv/stream/error pHandlers (function (ev client)
-    (do
-      (print ev)
-    )
-  ))
 
-  (uv/stream/data pHandlers (function (ev client)
-    (do
-      (define req (http/request (string ev)))
-      (define rep (http/response))
-      (router req rep)
-      (uv/stream/write client (string rep))
-    )
-  ))
-
-  (uv/stream/write pHandlers (function (ev client)
-    (do
-      (uv/close client)
-    )
-  ))
-
-  (uv/stream/close pHandlers (function (ev client)
-    (do
-      (print "Peer Close")
-    )
-    
-  ))
-  (uv/stream/end pHandlers (function (ev client)
-    (do
-      (print "Peer End")
-      (uv/close client)  
-    )
-  ))
-  pHandlers
+(define handler (function (req rep)  
+  (http/response/code rep 200u16)
+  (http/response/body rep "Cool Stuff Dork")
 ))
 
-(define makeServerHandlers (function (loop pHandlers success failure) 
-  (define sHandlers (uv/stream))
-  (uv/stream/error sHandlers (function (ev server)
+(define peerHandlers (uv/stream {
+  :error (function (ev client)
     (print ev)
-  ))
-  (uv/stream/listen sHandlers (function (ev server)
-    (do
-      (define peer (uv/tcp loop))
-      
-      (uv/stream/context peer pHandlers)
-      (uv/stream/accept server peer)
-      (uv/stream/read peer)
-    )
-  ))
-  sHandlers
-))
+  )
+  :data (function (ev client)
+    (print ev)
+    (define req (http/request (string ev)))
+    (define rep (http/response))
+    (handler req rep)
+    (uv/stream/write client (string rep))
+  )
+  :write (function (ev client)
+    (print ev)
+    (uv/close client)
+  )
+}))
 
 
-(define express (function ()
-  (define loop (uv/loop))
-  {
-    "loop" loop
-    "server" (uv/tcp loop)
-    "routes" {}
-  }
-))
+(define serverHandlers (uv/stream {
+  :error (function (ev server)
+    (print ev)
+  )
+  :listen (function (ev server)
+    (print ev)
+    (define peer (uv/tcp loop))
+    
+    (uv/stream/context peer peerHandlers)
+    (uv/stream/accept server peer)
+    (uv/stream/read peer)
+  )
+  :write (function (ev client)
+    (print ev)
+    (uv/close client)
+  )
+}))
 
-(define express/all (function (exp s handler)
-  (map/set (map/get exp "routes") s handler)
-))
-
-(define express/listen (function (exp port success failure)
-  (define loop (map/get exp "loop"))    
-  (define server (map/get exp "server"))
-  
-  (define handle (function (req rep)
-    (define route (map/get (map/get exp "routes") (http/request/path exp)))
-    (cond route
-      (route req rep)
-      (do
-        (http/response/code rep 404)
-        (http/response/body "Request Not Found")
-      )
-    )
-  ))
-  (define pHandlers (makePeerHandlers handle))
-  (define sHandlers (makeServerHandlers loop pHandlers success failure))
-  (uv/stream/context server sHandlers)
-  (uv/tcp/bind (map/get exp "server") "127.0.0.1" (uint32 port))
-  (uv/run loop)
-))
+(define server (uv/tcp loop))
+(uv/stream/context server serverHandlers)
+(uv/tcp/bind server "127.0.0.1" 6112u32)
+(uv/run loop)

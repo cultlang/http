@@ -1,6 +1,5 @@
-
-(load-dll "CultlangUv.dll")
-(load-dll "CultlangHttp.dll")
+(load-dll "CultlangUv")
+(load-dll "CultlangHttp")
 
 (require "builtin:cult/uv")
 (require "builtin:cult/http")

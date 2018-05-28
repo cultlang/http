@@ -1,24 +1,17 @@
 
-(cond (string/compare (platform/triplecross) "x86_64-pc-windows-msvccoff") 
-  (do
-    (load-dll "CultlangUv.dll")
-    (load-dll "CultlangHttp.dll")
-  )
-  (do
-    (load-dll "libCultlangUv.so")
-    (load-dll "libCultlangHttp.so")
-  )
-)
+(load-dll "CultlangUv.dll")
+(load-dll "CultlangHttp.dll")
 
 (require "builtin:cult/uv")
 (require "builtin:cult/http")
 
 (define loop (uv/loop))
 
-
-(define handler (function (req rep)  
-  (http/response/code rep 200u16)
-  (http/response/body rep "Cool Stuff Dork")
+(define pathToFile (function (path)
+  (cond (string/compare path "/")
+    "index.html"
+    (string/slice path 1)
+  )
 ))
 
 (define peerHandlers (uv/stream {
@@ -29,11 +22,38 @@
     (print ev)
     (define req (http/request (string ev)))
     (define rep (http/response))
-    (handler req rep)
-    (uv/stream/write client (string rep))
+    
+    (define handlers (uv/fs/context {
+      :error (function (ev handle)
+        (print ev)
+        (http/response/code rep 404u16)
+        (http/response/body rep "File Not Found Dork")
+        (uv/stream/write client (string rep))
+      )
+      :open (function (ev handle)
+        (uv/fs/fstat handle)
+      )
+      
+      :fstat (function (ev handle)
+        (uv/fs/read handle 0 (int64 (uv/fs/stat/size ev)))
+      )
+      
+      :read (function (ev handle)
+        (http/response/code rep 404u16)
+        (http/response/body rep (string ev))
+        (uv/stream/write client (string rep))
+        (uv/fs/close handle)
+      )
+      
+      :close (function (ev handle)
+        (print "done")
+      )
+    }))
+    (define file (uv/fs/file loop))
+    (uv/fs/file/context file handlers)
+    (uv/fs/open file (pathToFile (http/request/path req)))
   )
   :write (function (ev client)
-    (print ev)
     (uv/close client)
   )
 }))
